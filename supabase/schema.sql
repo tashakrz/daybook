@@ -13,6 +13,11 @@ create table if not exists public.items (
 
 create index if not exists items_user_server_updated_idx on public.items (user_id, server_updated_at);
 
+-- Let signed-in users reach the table through the API (needed when
+-- "Automatically expose new tables" is turned off). Logged-out visitors get nothing.
+revoke all on public.items from anon;
+grant select, insert, update, delete on public.items to authenticated;
+
 -- Row Level Security: each person can only ever see and change their own rows.
 alter table public.items enable row level security;
 
