@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useItems } from '../lib/store.js'
-import { monthGrid, sameMonth, addMonths, fmtMonth, fmtLong, parse, today as todayStr, diffDays } from '../lib/dates.js'
+import { monthGrid, sameMonth, addMonths, addDays, weekOf, fmtShort, fmtMonth, fmtLong, parse, today as todayStr, diffDays } from '../lib/dates.js'
 import { eventOn, isScheduled, isDone, habitLogId, reminderActive } from '../lib/model.js'
 import { cssVars, DEFAULTS } from '../lib/colors.js'
 import { dayMarks } from '../lib/cycle.js'
-import { Icon, useRoute, go, Empty } from '../components/ui.jsx'
+import { Icon, useRoute, go, Empty, Segmented, useLocal } from '../components/ui.jsx'
+import { WeekView } from '../components/WeekView.jsx'
 import { openEditor } from '../components/EditorHost.jsx'
 import { AssignmentRow, useCycle } from './Today.jsx'
 import { labelFor } from '../components/PeriodLogSheet.jsx'
@@ -18,6 +19,17 @@ export default function Calendar() {
   const selected = params.d || today
   const [month, setMonth] = useState(selected)
   const select = (d) => go(`/calendar?d=${d}`)
+  const [view, setView] = useLocal('daybook:cal-view', 'month')
+  const week = weekOf(selected)
+  const weekTitle = (() => {
+    const [a, b] = [week[0], week[6]]
+    if (a.slice(0, 7) === b.slice(0, 7)) return `${fmtShort(a)} – ${parse(b).getDate()}`
+    return `${fmtShort(a)} – ${fmtShort(b)}`
+  })()
+  const step = (n) => {
+    if (view === 'week') select(addDays(selected, n * 7))
+    else setMonth(addMonths(month, n))
+  }
 
   const assignments = useItems('assignment')
   const exams = useItems('exam')
@@ -48,22 +60,33 @@ export default function Calendar() {
       <header className="page-head">
         <div>
           <p className="eyebrow">Calendar</p>
-          <h1>{fmtMonth(month)}</h1>
+          <h1>{view === 'week' ? weekTitle : fmtMonth(month)}</h1>
         </div>
         <div className="head-actions">
-          <button className="icon-btn soft" onClick={() => setMonth(addMonths(month, -1))} aria-label="Previous month">
+          <Segmented
+            options={[
+              { value: 'month', label: 'Month' },
+              { value: 'week', label: 'Week' },
+            ]}
+            value={view}
+            onChange={(v) => (setView(v), v === 'month' && setMonth(selected))}
+          />
+          <button className="icon-btn soft" onClick={() => step(-1)} aria-label={view === 'week' ? 'Previous week' : 'Previous month'}>
             <Icon name="left" />
           </button>
           <button className="btn ghost small" onClick={() => (setMonth(today), select(today))}>
             Today
           </button>
-          <button className="icon-btn soft" onClick={() => setMonth(addMonths(month, 1))} aria-label="Next month">
+          <button className="icon-btn soft" onClick={() => step(1)} aria-label={view === 'week' ? 'Next week' : 'Next month'}>
             <Icon name="right" />
           </button>
         </div>
       </header>
 
-      <div className="cal-layout">
+      <div className={`cal-layout view-${view}`}>
+        {view === 'week' ? (
+          <WeekView selected={selected} select={select} itemsOn={itemsOn} classById={classById} olColor={olColor} pred={pred} logByDate={logByDate} />
+        ) : (
         <div className="month panel">
           <div className="month-head">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
@@ -118,6 +141,7 @@ export default function Calendar() {
             <span><i className="lg fertile" /> Fertile window (estimate)</span>
           </div>
         </div>
+        )}
 
         <DayPanel
           date={selected}
