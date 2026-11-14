@@ -2,12 +2,13 @@
 // parsed on the device and cached so it still shows offline.
 import { useSyncExternalStore } from 'react'
 import { supabase } from './supabase.js'
-import { parseIcs } from './ics.js'
+import { parseIcs, localize } from './ics.js'
 import { addDays, today } from './dates.js'
 import { getSettings } from './model.js'
 import { getUser } from './store.js'
 
 const KEY = 'daybook:outlook-cache'
+const VERSION = 2 // bump when the cached event shape changes
 const STALE_MS = 30 * 60 * 1000
 
 function load() {
@@ -17,7 +18,8 @@ function load() {
     return null
   }
 }
-let cache = load() // { url, fetchedAt, events, uid }
+let cache = load() // { v, url, fetchedAt, events, uid }
+if (cache?.v !== VERSION) cache = null
 let state = { status: 'idle', error: null }
 const ls = new Set()
 const emit = () => ls.forEach((l) => l())
@@ -32,12 +34,14 @@ export function useOutlook() {
   return useSyncExternalStore((l) => (ls.add(l), () => ls.delete(l)), () => snapshot)
 }
 
-/** Events for the signed-in user's current link (empty if none / stale link). */
+/** Events for the signed-in user's current link, in the chosen time zone. */
+let memo = { events: null, zone: null, out: [] }
 export function currentEvents(snap) {
   const s = getSettings()
   const c = snap.cache
   if (!s.outlookUrl || !c || c.url !== s.outlookUrl || c.uid !== getUser()) return []
-  return c.events
+  if (memo.events !== c.events || memo.zone !== s.outlookTz) memo = { events: c.events, zone: s.outlookTz, out: localize(c.events, s.outlookTz) }
+  return memo.out
 }
 
 export async function refreshOutlook({ force = false } = {}) {
@@ -62,7 +66,7 @@ export async function refreshOutlook({ force = false } = {}) {
     }
     const t = today()
     const events = parseIcs(data.ics, addDays(t, -120), addDays(t, 400))
-    cache = { url, uid: getUser(), fetchedAt: Date.now(), events }
+    cache = { v: VERSION, url, uid: getUser(), fetchedAt: Date.now(), events }
     try {
       localStorage.setItem(KEY, JSON.stringify(cache))
     } catch {

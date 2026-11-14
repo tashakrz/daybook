@@ -91,6 +91,7 @@ export const DEFAULT_SETTINGS = {
   outlookUrl: '',
   outlookColor: 'clay',
   outlookOnToday: true,
+  outlookTz: -420, // UTC−7: BC stays on daylight time year-round
 }
 export const getSettings = () => ({ ...DEFAULT_SETTINGS, ...(get('settings') || {}) })
 

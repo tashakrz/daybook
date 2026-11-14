@@ -193,6 +193,17 @@ function OutlookSettings({ s, set, local }) {
                 <input type="checkbox" checked={s.outlookOnToday} onChange={(e) => set('outlookOnToday', e.target.checked)} />
                 Show today’s Outlook events on the Today page
               </label>
+              <Field label="Show Outlook times in" hint="Pick the zone your Outlook is set to if times look off by an hour.">
+                <select value={String(s.outlookTz ?? 'device')} onChange={(e) => set('outlookTz', e.target.value === 'device' ? 'device' : Number(e.target.value))}>
+                  <option value="device">This device’s time zone ({deviceZoneLabel()})</option>
+                  {TZ_OFFSETS.map((m) => (
+                    <option key={m} value={m}>
+                      {offsetLabel(m)}
+                      {m === -420 ? ' · BC (no more clock changes)' : m === -480 ? ' · Pacific standard' : ''}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <Field label="Colour for Outlook events">
                 <ColorPicker value={s.outlookColor} onChange={(v) => set('outlookColor', v)} />
               </Field>
@@ -202,4 +213,18 @@ function OutlookSettings({ s, set, local }) {
       )}
     </div>
   )
+}
+
+const TZ_OFFSETS = Array.from({ length: 27 }, (_, i) => (i - 12) * 60).concat([-210, 330, 345, 570]).sort((a, b) => a - b)
+function offsetLabel(m) {
+  const sign = m < 0 ? '−' : '+'
+  const a = Math.abs(m)
+  return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? ':' + String(a % 60).padStart(2, '0') : ''}`
+}
+function deviceZoneLabel() {
+  try {
+    return `${Intl.DateTimeFormat().resolvedOptions().timeZone}, now ${offsetLabel(-new Date().getTimezoneOffset())}`
+  } catch {
+    return offsetLabel(-new Date().getTimezoneOffset())
+  }
 }

@@ -1,6 +1,6 @@
 // Minimal iCalendar (.ics) reader for published Outlook calendars.
-// Times with a TZID are treated as wall-clock times (fine when the calendar and
-// this device share a time zone); UTC times ("Z") are converted to local time.
+// Timed events become absolute instants (using the calendar's own VTIMEZONE
+// rules, like Outlook does) and are shown in a chosen display time zone.
 import { addDays, toStr, parse as parseDate, diffDays } from './dates.js'
 
 const pad = (n) => String(n).padStart(2, '0')
@@ -25,18 +25,89 @@ function parseLine(line) {
 
 const unescape = (s) => s.replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1').trim()
 
-/** -> { date: 'YYYY-MM-DD', time: 'HH:MM' | null } */
+/** -> { date: 'YYYY-MM-DD', time: 'HH:MM' | null, utc, tzid } (wall-clock in its own zone) */
 function parseWhen(value, params = {}) {
   const v = value.trim()
   if (params.VALUE === 'DATE' || /^\d{8}$/.test(v)) return { date: `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}`, time: null }
   const m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/)
   if (!m) return null
   const [, y, mo, d, h, mi, , z] = m
-  if (z) {
-    const dt = new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi))
-    return { date: toStr(dt), time: `${pad(dt.getHours())}:${pad(dt.getMinutes())}` }
+  return { date: `${y}-${mo}-${d}`, time: `${h}:${mi}`, utc: !!z, tzid: z ? null : params.TZID || null }
+}
+
+/* ---------- time zones ---------- */
+const parseOffset = (s) => {
+  const m = String(s || '').match(/^([+-])(\d{2})(\d{2})/)
+  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0
+}
+const wallMs = (date, time) => {
+  const [y, mo, d] = date.split('-').map(Number)
+  const [h, mi] = (time || '00:00').split(':').map(Number)
+  return Date.UTC(y, mo - 1, d, h, mi)
+}
+
+/** Offset (minutes east of UTC) in effect at a wall-clock time, per a VTIMEZONE. */
+function vtzOffset(vtz, date, time) {
+  const w = wallMs(date, time)
+  const year = Number(date.slice(0, 4))
+  let best = null
+  for (const c of vtz.parts) {
+    const onsets = []
+    if (c.rrule && c.rrule.freq === 'YEARLY') {
+      for (const y of [year - 1, year]) {
+        if (c.rrule.until && `${y}` > c.rrule.until.slice(0, 4)) continue
+        if (`${y}` < c.start.date.slice(0, 4)) continue
+        const m = (c.rrule.bymonth?.[0] || Number(c.start.date.slice(5, 7))) - 1
+        const days = monthCandidates(y, m, c.rrule.byday || c.rrule.bymonthday ? c.rrule : { ...c.rrule, bymonthday: [Number(c.start.date.slice(8, 10))] }, c.start.date)
+        if (days[0]) onsets.push(days[0])
+      }
+    } else onsets.push(c.start.date)
+    for (const d of onsets) {
+      const t = wallMs(d, c.start.time)
+      if (t <= w && (!best || t > best.t)) best = { t, off: c.offsetTo }
+    }
   }
-  return { date: `${y}-${mo}-${d}`, time: `${h}:${mi}` }
+  if (best) return best.off
+  return vtz.parts[0]?.offsetFrom ?? vtz.parts[0]?.offsetTo ?? 0
+}
+
+/** Offset of an IANA zone at a UTC instant (minutes east), or null if unknown. */
+function ianaOffset(tz, ms) {
+  try {
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    const p = Object.fromEntries(f.formatToParts(new Date(ms)).map((x) => [x.type, x.value]))
+    return Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) - ms) / 60000)
+  } catch {
+    return null
+  }
+}
+
+/** Absolute instant (ms) for a wall-clock time, or null for a "floating" time. */
+function toInstant(date, time, when, zones) {
+  const w = wallMs(date, time)
+  if (when.utc) return w
+  if (!when.tzid) return null
+  const vtz = zones[when.tzid]
+  if (vtz) return w - vtzOffset(vtz, date, time) * 60000
+  const guess = ianaOffset(when.tzid, w)
+  if (guess == null) return null
+  const off = ianaOffset(when.tzid, w - guess * 60000)
+  return w - off * 60000
+}
+
+/**
+ * Display zone: 'device', a number (fixed offset in minutes east of UTC, e.g. -420),
+ * or an IANA name. Returns { date, time } for an instant.
+ */
+export function inZone(ms, zone) {
+  let d
+  if (zone === 'device' || zone == null || zone === '') {
+    d = new Date(ms)
+    return { date: toStr(d), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` }
+  }
+  const off = typeof zone === 'number' ? zone : ianaOffset(zone, ms) ?? -new Date(ms).getTimezoneOffset()
+  d = new Date(ms + off * 60000)
+  return { date: `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`, time: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}` }
 }
 
 function parseRRule(v) {
@@ -136,9 +207,35 @@ function expand(startDate, rule, to) {
 export function parseIcs(text, from, to) {
   const lines = unfold(text)
   const raw = []
+  const zones = {}
   let cur = null
   let depth = 0
+  let tz = null
+  let tzPart = null
   for (const line of lines) {
+    if (line === 'BEGIN:VTIMEZONE') {
+      tz = { tzid: null, parts: [] }
+      continue
+    }
+    if (tz) {
+      if (line === 'END:VTIMEZONE') {
+        if (tz.tzid) zones[tz.tzid] = tz
+        tz = null
+      } else if (line === 'BEGIN:STANDARD' || line === 'BEGIN:DAYLIGHT') tzPart = {}
+      else if (line === 'END:STANDARD' || line === 'END:DAYLIGHT') {
+        if (tzPart?.start) tz.parts.push(tzPart)
+        tzPart = null
+      } else {
+        const p = parseLine(line)
+        if (!p) continue
+        if (!tzPart && p.name === 'TZID') tz.tzid = p.value
+        else if (tzPart && p.name === 'DTSTART') tzPart.start = parseWhen(p.value)
+        else if (tzPart && p.name === 'TZOFFSETTO') tzPart.offsetTo = parseOffset(p.value)
+        else if (tzPart && p.name === 'TZOFFSETFROM') tzPart.offsetFrom = parseOffset(p.value)
+        else if (tzPart && p.name === 'RRULE') tzPart.rrule = parseRRule(p.value)
+      }
+      continue
+    }
     if (line === 'BEGIN:VEVENT') {
       cur = { exdates: new Set() }
       depth = 0
@@ -182,36 +279,65 @@ export function parseIcs(text, from, to) {
   for (const e of raw) {
     if (!e.start || e.status === 'CANCELLED') continue
     const allDay = e.start.time == null
-    // length in days (all-day DTEND is exclusive)
-    let spanDays = 0
-    if (e.end) {
-      spanDays = diffDays(e.start.date, e.end.date)
-      if (allDay || (e.end.time === '00:00' && spanDays > 0)) spanDays -= 1
-      spanDays = Math.max(0, spanDays)
-    } else if (e.duration) {
-      const m = e.duration.match(/P(?:(\d+)W)?(?:(\d+)D)?/)
-      if (m) spanDays = Math.max(0, (Number(m[1]) || 0) * 7 + (Number(m[2]) || 0) - (allDay ? 1 : 0))
-    }
+    const base = { title: e.title || '(No title)', location: e.location || '' }
     const starts =
       e.rrule && !e.recurrenceId
-        ? expand(e.start.date, e.rrule, to).filter((d) => !e.exdates.has(d) && !overridden.get(e.uid)?.has(d))
+        ? expand(e.start.date, e.rrule, addDays(to, 1)).filter((d) => !e.exdates.has(d) && !overridden.get(e.uid)?.has(d))
         : [e.start.date]
+
+    if (allDay) {
+      let spanDays = 0
+      if (e.end) spanDays = Math.max(0, diffDays(e.start.date, e.end.date) - 1)
+      else if (e.duration) {
+        const m = e.duration.match(/P(?:(\d+)W)?(?:(\d+)D)?/)
+        if (m) spanDays = Math.max(0, (Number(m[1]) || 0) * 7 + (Number(m[2]) || 0) - 1)
+      }
+      for (const d of starts) {
+        const endDate = addDays(d, spanDays)
+        if (endDate < from || d > to) continue
+        out.push({ id: `${e.uid || e.title}:${d}`, ...base, allDay: true, date: d, endDate })
+      }
+      continue
+    }
+
+    // timed: duration from the original start/end, each occurrence anchored in its own zone
+    const s0 = toInstant(e.start.date, e.start.time, e.start, zones)
+    let durMs = 0
+    if (e.end && e.end.time != null) {
+      const e0 = toInstant(e.end.date, e.end.time, e.end, zones)
+      durMs = s0 != null && e0 != null ? e0 - s0 : wallMs(e.end.date, e.end.time) - wallMs(e.start.date, e.start.time)
+    } else if (e.duration) {
+      const m = e.duration.match(/P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?/)
+      if (m) durMs = ((+m[1] || 0) * 7 * 1440 + (+m[2] || 0) * 1440 + (+m[3] || 0) * 60 + (+m[4] || 0)) * 60000
+    }
+    durMs = Math.max(0, durMs)
     for (const d of starts) {
-      const endDate = addDays(d, spanDays)
-      if (endDate < from || d > to) continue
-      out.push({
-        id: `${e.uid || e.title}:${d}`,
-        title: e.title || '(No title)',
-        location: e.location || '',
-        date: d,
-        endDate,
-        time: allDay ? null : e.start.time,
-        endTime: allDay ? null : e.end?.time || null,
-        allDay,
-      })
+      if (addDays(d, 2) < from || d > addDays(to, 1)) continue
+      const id = `${e.uid || e.title}:${d}`
+      const ms = toInstant(d, e.start.time, e.start, zones)
+      if (ms == null) {
+        // floating time: same wall clock everywhere
+        const w = wallMs(d, e.start.time) + durMs
+        const end = inZone(w, 0)
+        out.push({ id, ...base, allDay: false, floating: true, date: d, time: e.start.time, endDate: end.date, endTime: durMs ? end.time : null })
+      } else out.push({ id, ...base, allDay: false, startMs: ms, endMs: ms + durMs })
     }
   }
-  return out.sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
+  return out
+}
+
+/** Give each event local date/time fields in the display zone, sorted. */
+export function localize(events, zone) {
+  return events
+    .map((e) => {
+      if (e.allDay || e.floating) return e
+      const s = inZone(e.startMs, zone)
+      let end = inZone(Math.max(e.startMs, e.endMs), zone)
+      let endDate = end.date
+      if (end.time === '00:00' && endDate > s.date) endDate = addDays(endDate, -1)
+      return { ...e, date: s.date, time: s.time, endDate, endTime: e.endMs > e.startMs ? end.time : null }
+    })
+    .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
 }
 
 export const icsEventOn = (e, date) => date >= e.date && date <= e.endDate
