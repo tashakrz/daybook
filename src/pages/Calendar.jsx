@@ -75,11 +75,12 @@ export default function Calendar() {
               const it = itemsOn(d)
               const pm = dayMarks(d, pred, logByDate)
               const chips = [
-                ...it.outlook.map((e) => ({ k: e.id, t: (e.time && e.date === d ? e.time.replace(/^0/, '') + ' ' : '') + e.title, c: olColor })),
                 ...it.events.map((e) => ({ k: e.id, t: e.title, c: e.color || DEFAULTS.event })),
                 ...it.exams.map((x) => ({ k: x.id, t: '📝 ' + x.title, c: x.color || DEFAULTS.exam })),
                 ...it.assignments.map((a) => ({ k: a.id, t: a.title, c: a.color || classById[a.classId]?.color || DEFAULTS.school, done: a.done })),
                 ...it.reminders.filter((r) => r.date === d).map((r) => ({ k: r.id, t: r.text, c: r.color || DEFAULTS.reminder, done: r.done })),
+                // view-only Outlook events: plain text, listed after your own items
+                ...it.outlook.map((e) => ({ k: e.id, t: e.title, time: e.time && e.date === d ? e.time.replace(/^0/, '') : null, c: olColor, plain: true })),
               ]
               return (
                 <button
@@ -92,12 +93,20 @@ export default function Calendar() {
                     {pm.ovulation && <i className="ov" title="Estimated ovulation" />}
                   </span>
                   <span className="cell-chips">
-                    {chips.slice(0, 3).map((c) => (
-                      <span key={c.k} className={`mini ${c.done ? 'done' : ''}`} style={cssVars(c.c)}>
-                        {c.t}
-                      </span>
-                    ))}
-                    {chips.length > 3 && <span className="more">+{chips.length - 3}</span>}
+                    {chips.slice(0, 4).map((c) =>
+                      c.plain ? (
+                        <span key={c.k} className="mini plain" style={cssVars(c.c)}>
+                          <i />
+                          {c.time && <span className="mini-time">{c.time}</span>}
+                          {c.t}
+                        </span>
+                      ) : (
+                        <span key={c.k} className={`mini ${c.done ? 'done' : ''}`} style={cssVars(c.c)}>
+                          {c.t}
+                        </span>
+                      ),
+                    )}
+                    {chips.length > 4 && <span className="more">+{chips.length - 4}</span>}
                   </span>
                 </button>
               )
