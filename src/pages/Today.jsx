@@ -8,6 +8,8 @@ import { HabitCard } from '../components/HabitCards.jsx'
 import { Check, Icon, Section, Empty, go, Segmented } from '../components/ui.jsx'
 import { openEditor } from '../components/EditorHost.jsx'
 import { REMINDER_MODES } from '../components/editors.jsx'
+import { useOutlook, currentEvents } from '../lib/outlook.js'
+import { icsEventOn, fmtTimeRange } from '../lib/ics.js'
 
 export function useToday() {
   // re-render when the date changes while the app stays open
@@ -42,6 +44,8 @@ export default function Today() {
   const events = useItems('event')
   const classes = useItems('class')
   const { pred } = useCycle()
+  const outlook = currentEvents(useOutlook())
+  const olToday = settings.outlookOnToday ? outlook.filter((e) => icsEventOn(e, date)) : []
 
   const logById = useMemo(() => Object.fromEntries(logs.map((l) => [l.id, l])), [logs])
   const classById = Object.fromEntries(classes.map((c) => [c.id, c]))
@@ -80,7 +84,22 @@ export default function Today() {
         <CycleChip pred={pred} />
       </header>
 
-      <WeekStrip date={date} habits={habits} logById={logById} assignments={assignments} events={events} exams={exams} pred={pred} />
+      <WeekStrip date={date} habits={habits} logById={logById} assignments={assignments} events={events} exams={exams} pred={pred} outlook={outlook} />
+
+      {olToday.length > 0 && (
+        <div className="upcoming outlook-today">
+          <span className="upcoming-label">Today in Outlook</span>
+          <ul>
+            {olToday.map((e) => (
+              <li key={e.id} style={cssVars(settings.outlookColor)} onClick={() => go(`/calendar?d=${date}`)}>
+                <i className="dot" />
+                <span className="up-date">{fmtTimeRange(e, date)}</span> {e.title}
+                {e.location && <span className="muted"> · {e.location}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {(upcoming.length > 0 || ongoing.length > 0) && (
         <div className="upcoming">
@@ -190,7 +209,7 @@ function CycleChip({ pred }) {
   )
 }
 
-function WeekStrip({ date, habits, logById, assignments, events, exams, pred }) {
+function WeekStrip({ date, habits, logById, assignments, events, exams, pred, outlook }) {
   const days = weekOf(date)
   return (
     <div className="week-strip">
@@ -199,7 +218,7 @@ function WeekStrip({ date, habits, logById, assignments, events, exams, pred }) 
         const done = sched.filter((h) => isDone(h, logById[habitLogId(h.id, d)])).length
         const pct = sched.length ? done / sched.length : 0
         const hasDue = assignments.some((a) => !a.done && a.due === d)
-        const hasEvent = events.some((e) => eventOn(e, d)) || exams.some((x) => x.date === d)
+        const hasEvent = events.some((e) => eventOn(e, d)) || exams.some((x) => x.date === d) || outlook.some((e) => icsEventOn(e, d))
         const period = pred.episodes?.some((e) => d >= e.start && d <= e.end) || pred.futurePeriods?.some((p) => d >= p.start && d <= p.end)
         return (
           <button key={d} className={`wk-day ${d === date ? 'is-today' : ''} ${d > date ? 'future' : ''}`} onClick={() => go(`/calendar?d=${d}`)}>

@@ -8,6 +8,9 @@ import { Icon, useRoute, go, Empty } from '../components/ui.jsx'
 import { openEditor } from '../components/EditorHost.jsx'
 import { AssignmentRow, useCycle } from './Today.jsx'
 import { labelFor } from '../components/PeriodLogSheet.jsx'
+import { useOutlook, currentEvents } from '../lib/outlook.js'
+import { icsEventOn, fmtTimeRange } from '../lib/ics.js'
+import { getSettings } from '../lib/model.js'
 
 export default function Calendar() {
   const { params } = useRoute()
@@ -27,6 +30,9 @@ export default function Calendar() {
   const logByDate = useMemo(() => Object.fromEntries(logs.map((l) => [l.date, l])), [logs])
   const hlById = useMemo(() => Object.fromEntries(habitLogs.map((l) => [l.id, l])), [habitLogs])
   const classById = Object.fromEntries(classes.map((c) => [c.id, c]))
+  const outlook = currentEvents(useOutlook())
+  useItems('settings')
+  const olColor = getSettings().outlookColor
 
   const days = monthGrid(month)
   const itemsOn = (d) => ({
@@ -34,6 +40,7 @@ export default function Calendar() {
     exams: exams.filter((x) => x.date === d),
     assignments: assignments.filter((a) => a.due === d),
     reminders: reminders.filter((r) => r.date === d || (!r.done && d === today && reminderActive(r, d) && !r.date)),
+    outlook: outlook.filter((e) => icsEventOn(e, d)),
   })
 
   return (
@@ -68,6 +75,7 @@ export default function Calendar() {
               const it = itemsOn(d)
               const pm = dayMarks(d, pred, logByDate)
               const chips = [
+                ...it.outlook.map((e) => ({ k: e.id, t: (e.time && e.date === d ? e.time.replace(/^0/, '') + ' ' : '') + e.title, c: olColor })),
                 ...it.events.map((e) => ({ k: e.id, t: e.title, c: e.color || DEFAULTS.event })),
                 ...it.exams.map((x) => ({ k: x.id, t: '📝 ' + x.title, c: x.color || DEFAULTS.exam })),
                 ...it.assignments.map((a) => ({ k: a.id, t: a.title, c: a.color || classById[a.classId]?.color || DEFAULTS.school, done: a.done })),
@@ -106,6 +114,7 @@ export default function Calendar() {
           date={selected}
           items={itemsOn(selected)}
           classById={classById}
+          olColor={olColor}
           habits={habits}
           hlById={hlById}
           log={logByDate[selected]}
@@ -116,10 +125,10 @@ export default function Calendar() {
   )
 }
 
-function DayPanel({ date, items, classById, habits, hlById, log, marks }) {
+function DayPanel({ date, items, olColor, classById, habits, hlById, log, marks }) {
   const today = todayStr()
   const sched = habits.filter((h) => isScheduled(h, date))
-  const empty = !items.events.length && !items.exams.length && !items.assignments.length && !items.reminders.length
+  const empty = !items.events.length && !items.exams.length && !items.assignments.length && !items.reminders.length && !items.outlook.length
   return (
     <aside className="day-panel panel">
       <div className="section-head">
@@ -139,6 +148,17 @@ function DayPanel({ date, items, classById, habits, hlById, log, marks }) {
               <span className="muted small">
                 {e.time || 'Important date'}
                 {e.yearly && ' · yearly'}
+              </span>
+            </div>
+          </li>
+        ))}
+        {items.outlook.map((e) => (
+          <li key={e.id} style={cssVars(olColor)} className="readonly">
+            <i className="bar" />
+            <div>
+              <strong>{e.title}</strong>
+              <span className="muted small">
+                {[e.allDay ? 'All day' : fmtTimeRange(e, date), e.location, 'Outlook'].filter(Boolean).join(' · ')}
               </span>
             </div>
           </li>
@@ -219,3 +239,4 @@ function DayPanel({ date, items, classById, habits, hlById, log, marks }) {
     </aside>
   )
 }
+

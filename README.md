@@ -27,7 +27,13 @@ Data is saved on the device first (IndexedDB), so everything works offline. Chan
 2. In the repo, open **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
 3. Every push to `main` builds and deploys automatically. You can watch progress in the **Actions** tab. The site is at `https://<username>.github.io/<repo-name>/`.
 
-### 3. Install it
+### 3. Outlook calendar (optional, read-only)
+1. Supabase → **Edge Functions → Deploy a new function → Via Editor**. Name it `outlook-ics`, paste `supabase/functions/outlook-ics/index.ts`, and deploy.
+2. Open the function's **Details / Settings**, turn **Verify JWT** off, and save. The code checks the signed-in user itself.
+3. Outlook on the web → Settings → **Calendar → Shared calendars → Publish a calendar**. Pick your calendar and **Can view all details**, click **Publish**, and copy the **ICS** link.
+4. Daybook → **Settings → Outlook calendar**: paste the link.
+
+### 4. Install it
 - **iPhone**: open the site in **Safari** → Share → **Add to Home Screen**.
 - **Mac**: in Safari, **File → Add to Dock**. In Chrome, use the install icon in the address bar.
 

@@ -8,6 +8,7 @@ import { today as todayStr, fmtDay } from './lib/dates.js'
 import { cssVars, DEFAULTS } from './lib/colors.js'
 import { Blobs, Icon, useRoute, go, Sheet, Check } from './components/ui.jsx'
 import { EditorHost } from './components/EditorHost.jsx'
+import { refreshOutlook, clearOutlook } from './lib/outlook.js'
 import Login, { NewPassword } from './pages/Login.jsx'
 import Today from './pages/Today.jsx'
 import Calendar from './pages/Calendar.jsx'
@@ -85,6 +86,7 @@ export default function App() {
     stopSync()
     await supabase?.auth.signOut({ scope: 'local' }).catch(() => {})
     if (user) await destroyUserData(user)
+    clearOutlook()
     localStorage.removeItem(USER_KEY)
     setUser(null)
     setEmail(null)
@@ -127,6 +129,16 @@ function Shell({ email, onSignOut, onSignIn }) {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [path])
+  useEffect(() => {
+    refreshOutlook()
+    const onVis = () => document.visibilityState === 'visible' && refreshOutlook()
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('online', onVis)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('online', onVis)
+    }
+  }, [])
   return (
     <div className="shell">
       <Blobs />

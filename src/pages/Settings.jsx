@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { patch, hasDirty, getUser, useItems } from '../lib/store.js'
 import { getSettings, DEFAULT_SETTINGS } from '../lib/model.js'
 import { useSyncState, syncNow } from '../lib/sync.js'
-import { Section, Field, Segmented, go } from '../components/ui.jsx'
+import { Section, Field, Segmented, ColorPicker, go } from '../components/ui.jsx'
+import { useOutlook, refreshOutlook, clearOutlook, currentEvents } from '../lib/outlook.js'
 import { REMINDER_MODES } from '../components/editors.jsx'
 import { supabase } from '../lib/supabase.js'
 
@@ -77,6 +78,10 @@ export default function Settings({ email, onSignOut, onSignIn }) {
           </div>
         </Section>
 
+        <Section title="Outlook calendar">
+          <OutlookSettings s={s} set={set} local={local} />
+        </Section>
+
         <Section title="Water">
           <div className="card form">
             <Field label="Units">
@@ -137,6 +142,64 @@ export default function Settings({ email, onSignOut, onSignIn }) {
           </div>
         </Section>
       </div>
+    </div>
+  )
+}
+
+function OutlookSettings({ s, set, local }) {
+  const ol = useOutlook()
+  const events = currentEvents(ol)
+  const save = async (url) => {
+    const v = url.trim()
+    if (v === s.outlookUrl) return
+    await set('outlookUrl', v)
+    if (v) refreshOutlook({ force: true })
+    else clearOutlook()
+  }
+  return (
+    <div className="card form">
+      <p className="muted small">
+        Shows your Outlook events in Daybook (read-only). In Outlook on the web: Settings → Calendar → Shared calendars → Publish a calendar → pick
+        your calendar and “Can view all details” → Publish → copy the <strong>ICS</strong> link and paste it here.
+      </p>
+      {local ? (
+        <p className="notice">Sign in to connect Outlook.</p>
+      ) : (
+        <>
+          <Field label="Outlook ICS link">
+            <input
+              type="url"
+              defaultValue={s.outlookUrl}
+              placeholder="https://outlook.live.com/owa/calendar/…/calendar.ics"
+              onBlur={(e) => save(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            />
+          </Field>
+          {s.outlookUrl && (
+            <>
+              <p className="ol-status muted">
+                {ol.status === 'loading' && 'Loading your Outlook calendar…'}
+                {ol.status === 'error' && <span className="error">{ol.error}</span>}
+                {ol.status === 'offline' && 'Offline. Showing the last copy.'}
+                {ol.status !== 'loading' && ol.status !== 'error' && ol.cache?.fetchedAt && events.length >= 0 && ol.cache.url === s.outlookUrl &&
+                  ` ${events.length} events · updated ${new Date(ol.cache.fetchedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
+              </p>
+              <div className="form-actions start">
+                <button className="btn ghost small" onClick={() => refreshOutlook({ force: true })}>
+                  Refresh now
+                </button>
+              </div>
+              <label className="toggle-row">
+                <input type="checkbox" checked={s.outlookOnToday} onChange={(e) => set('outlookOnToday', e.target.checked)} />
+                Show today’s Outlook events on the Today page
+              </label>
+              <Field label="Colour for Outlook events">
+                <ColorPicker value={s.outlookColor} onChange={(v) => set('outlookColor', v)} />
+              </Field>
+            </>
+          )}
+        </>
+      )}
     </div>
   )
 }

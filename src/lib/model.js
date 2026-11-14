@@ -88,6 +88,9 @@ export const DEFAULT_SETTINGS = {
   cycleLength: 28,
   periodLength: 5,
   showFertile: true,
+  outlookUrl: '',
+  outlookColor: 'clay',
+  outlookOnToday: true,
 }
 export const getSettings = () => ({ ...DEFAULT_SETTINGS, ...(get('settings') || {}) })
 
