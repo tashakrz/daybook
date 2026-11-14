@@ -605,3 +605,57 @@ details.later[open] summary { margin-bottom: 8px; }
   .calendar .head-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
 @media (min-width: 1000px) { .cal-layout.view-week { grid-template-columns: 1fr 320px; } }
+
+/* ---------- morning checks ---------- */
+.morning {
+  position: fixed; inset: 0; z-index: 60; overflow-y: auto;
+  background:
+    radial-gradient(60vmax 50vmax at 85% -10%, #fbe3b4 0%, transparent 60%),
+    radial-gradient(55vmax 45vmax at -10% 110%, #f8d3d6 0%, transparent 60%),
+    radial-gradient(40vmax 40vmax at 110% 80%, #e0d8f3 0%, transparent 65%),
+    var(--bg);
+  animation: fade 0.25s;
+}
+.morning-inner {
+  min-height: 100%; max-width: 760px; margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 40px) 20px calc(env(safe-area-inset-bottom) + 32px);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.morning h1 { font-size: clamp(34px, 8vw, 52px); }
+.morning-cards { display: grid; gap: 14px; margin-top: 18px; }
+@media (min-width: 700px) { .morning-cards { grid-template-columns: repeat(2, 1fr); } }
+.morning-card {
+  position: relative; overflow: hidden; text-align: left;
+  min-height: 150px; padding: 22px; border-radius: 34px;
+  display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr auto; gap: 4px 12px;
+  background: rgba(255, 253, 249, 0.85); border: 1px solid var(--line);
+  box-shadow: 0 18px 40px -24px rgba(60, 40, 20, 0.45);
+  transition: transform 0.15s, background 0.3s;
+}
+.morning-card::before {
+  content: ''; position: absolute; width: 220px; height: 220px; right: -60px; top: -80px;
+  border-radius: 46% 54% 52% 48% / 55% 45% 55% 45%;
+  background: linear-gradient(135deg, var(--c-a), var(--c-b)); opacity: 0.45; transition: all 0.4s;
+}
+.morning-card > * { position: relative; }
+.morning-card:active { transform: scale(0.98); }
+.morning-card.on { background: linear-gradient(135deg, var(--c-a), color-mix(in srgb, var(--c-b) 60%, var(--c-a))); border-color: transparent; }
+.morning-card.on::before { opacity: 0.25; transform: scale(1.6); }
+.mc-icon { font-size: 44px; line-height: 1; grid-column: 1; }
+.mc-name { font-size: 26px; line-height: 1.15; grid-column: 1; align-self: end; }
+.mc-state { font-size: 14.5px; color: var(--ink-2); font-style: italic; grid-column: 1; }
+.mc-check {
+  grid-column: 2; grid-row: 1 / 4; align-self: center;
+  width: 54px; height: 54px; display: grid; place-items: center;
+  border-radius: 46% 54% 50% 50% / 52% 46% 54% 48%;
+  border: 2px solid color-mix(in srgb, var(--c-b) 70%, var(--ink-2)); background: var(--surface);
+}
+.morning-card.on .mc-check { background: var(--surface); border-color: transparent; animation: pop 0.3s; }
+@keyframes pop { 50% { transform: scale(1.18); } }
+.morning-later { align-self: center; margin-top: 18px; }
+.morning-strip {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 12px 16px; border-radius: 20px; font-size: 15.5px;
+  background: linear-gradient(135deg, #fbe3b4, #f8d3d6); text-align: left;
+}
+.mc-edit { width: 100%; }

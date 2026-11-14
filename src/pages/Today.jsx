@@ -9,6 +9,7 @@ import { Check, Icon, Section, Empty, go, Segmented } from '../components/ui.jsx
 import { openEditor } from '../components/EditorHost.jsx'
 import { REMINDER_MODES } from '../components/editors.jsx'
 import { useOutlook, currentEvents } from '../lib/outlook.js'
+import { MorningStrip } from '../components/MorningChecks.jsx'
 import { icsEventOn, fmtTimeRange } from '../lib/ics.js'
 
 export function useToday() {
@@ -83,6 +84,8 @@ export default function Today() {
         </div>
         <CycleChip pred={pred} />
       </header>
+
+      <MorningStrip />
 
       <WeekStrip date={date} habits={habits} logById={logById} assignments={assignments} events={events} exams={exams} pred={pred} outlook={outlook} />
 

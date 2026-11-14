@@ -4,6 +4,7 @@ import { getSettings, DEFAULT_SETTINGS } from '../lib/model.js'
 import { useSyncState, syncNow } from '../lib/sync.js'
 import { Section, Field, Segmented, ColorPicker, go } from '../components/ui.jsx'
 import { useOutlook, refreshOutlook, clearOutlook, currentEvents } from '../lib/outlook.js'
+import { MorningSettings } from '../components/MorningChecks.jsx'
 import { REMINDER_MODES } from '../components/editors.jsx'
 import { supabase } from '../lib/supabase.js'
 
@@ -76,6 +77,10 @@ export default function Settings({ email, onSignOut, onSignIn }) {
               </>
             )}
           </div>
+        </Section>
+
+        <Section title="Morning checks">
+          <MorningSettings s={s} set={set} />
         </Section>
 
         <Section title="Outlook calendar">

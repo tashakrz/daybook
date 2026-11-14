@@ -9,6 +9,7 @@ import { cssVars, DEFAULTS } from './lib/colors.js'
 import { Blobs, Icon, useRoute, go, Sheet, Check } from './components/ui.jsx'
 import { EditorHost } from './components/EditorHost.jsx'
 import { refreshOutlook, clearOutlook } from './lib/outlook.js'
+import { MorningGate, isMorningDue } from './components/MorningChecks.jsx'
 import Login, { NewPassword } from './pages/Login.jsx'
 import Today from './pages/Today.jsx'
 import Calendar from './pages/Calendar.jsx'
@@ -172,6 +173,7 @@ function Shell({ email, onSignOut, onSignIn }) {
       </nav>
       <EditorHost />
       <ReminderPopup />
+      <MorningGate />
     </div>
   )
 }
@@ -210,14 +212,17 @@ function ReminderPopup() {
       setSnapshot(null) // filled from the current list on next render
       setOpen(true)
     }
-    const t = setTimeout(show, 600)
+    // wait for morning checks to be finished first
+    const showAfterMorning = () => (isMorningDue() ? window.addEventListener('daybook:morning-closed', show, { once: true }) : show())
+    const t = setTimeout(showAfterMorning, 600)
     const vis = () => {
       if (document.visibilityState === 'hidden') hiddenAt = Date.now()
-      else if (hiddenAt && Date.now() - hiddenAt > 60 * 60 * 1000) show()
+      else if (hiddenAt && Date.now() - hiddenAt > 60 * 60 * 1000) setTimeout(showAfterMorning, 300)
     }
     document.addEventListener('visibilitychange', vis)
     return () => {
       clearTimeout(t)
+      window.removeEventListener('daybook:morning-closed', show)
       document.removeEventListener('visibilitychange', vis)
     }
   }, [])

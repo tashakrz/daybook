@@ -91,11 +91,16 @@ export const DEFAULT_SETTINGS = {
   outlookUrl: '',
   outlookColor: 'clay',
   outlookOnToday: true,
+  morningEnabled: true,
+  morningStart: 7,
+  morningEnd: 11,
   outlookTz: -420, // UTC−7: BC stays on daylight time year-round
 }
 export const getSettings = () => ({ ...DEFAULT_SETTINGS, ...(get('settings') || {}) })
 
 export async function seedDefaults() {
+  await seed('morning', { id: 'morning-bed', name: 'Made my bed', icon: '🛏️', color: 'peach', order: 0 })
+  await seed('morning', { id: 'morning-meds', name: 'Took my ADHD meds', icon: '💊', color: 'lavender', order: 1 })
   await seed('settings', DEFAULT_SETTINGS)
   await seed('habit', {
     id: 'habit-water',
