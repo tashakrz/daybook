@@ -12,9 +12,9 @@ export default function School() {
       <header className="page-head">
         <div>
           <p className="eyebrow">School</p>
-          <h1>{tab === 'assignments' ? 'Assignments' : tab === 'exams' ? 'Exams & tests' : 'Classes'}</h1>
+          <h1>{tab === 'exams' ? 'Exams & tests' : 'Assignments'}</h1>
         </div>
-        <button className="btn primary" onClick={() => openEditor(tab === 'assignments' ? 'assignment' : tab === 'exams' ? 'exam' : 'class')}>
+        <button className="btn primary" onClick={() => openEditor(tab === 'exams' ? 'exam' : 'assignment')}>
           <Icon name="plus" size={18} /> Add
         </button>
       </header>
@@ -22,14 +22,12 @@ export default function School() {
         options={[
           { value: 'assignments', label: 'Assignments' },
           { value: 'exams', label: 'Exams' },
-          { value: 'classes', label: 'Classes' },
         ]}
         value={tab}
         onChange={setTab}
       />
-      {tab === 'assignments' && <Assignments />}
+      {tab !== 'exams' && <Assignments />}
       {tab === 'exams' && <Exams />}
-      {tab === 'classes' && <Classes />}
     </div>
   )
 }
@@ -116,34 +114,6 @@ function Exams() {
           </div>
         </details>
       )}
-    </div>
-  )
-}
-
-function Classes() {
-  const classes = useItems('class').sort((a, b) => a.name.localeCompare(b.name))
-  const assignments = useItems('assignment')
-  const exams = useItems('exam')
-  const today = todayStr()
-  return (
-    <div className="stack">
-      {!classes.length && <Empty>Add your classes to colour-code assignments and exams.</Empty>}
-      <div className="card-grid">
-        {classes.map((c) => {
-          const open = assignments.filter((a) => a.classId === c.id && !a.done).length
-          const next = exams.filter((x) => x.classId === c.id && x.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0]
-          return (
-            <button key={c.id} className="card class-card" style={cssVars(c.color)} onClick={() => openEditor('class', c)}>
-              <span className="class-swatch" />
-              <span className="task-title">{c.name}</span>
-              <span className="task-meta">
-                {open} open assignment{open === 1 ? '' : 's'}
-                {next && ` · next exam ${fmtDay(next.date)}`}
-              </span>
-            </button>
-          )
-        })}
-      </div>
     </div>
   )
 }

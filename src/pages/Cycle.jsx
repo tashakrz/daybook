@@ -7,7 +7,7 @@ import { Icon, Section, Sheet, Field, Empty, Segmented } from '../components/ui.
 import { openEditor } from '../components/EditorHost.jsx'
 import { useCycle } from './Today.jsx'
 
-const PHASE_COLORS = { menstrual: '#E57C8E', follicular: '#E9B949', ovulation: '#5FA8A3', luteal: '#9C8AD0' }
+const PHASE_COLORS = { menstrual: '#e0566b', follicular: '#ec9840', ovulation: '#3aa2a4', luteal: '#8f9ae6' }
 
 export default function Cycle() {
   const { pred, logs, bc } = useCycle()
@@ -19,7 +19,7 @@ export default function Cycle() {
       <header className="page-head">
         <div>
           <p className="eyebrow">Cycle · {METHODS[pred.method].label}</p>
-          <h1>{headline(pred, today)}</h1>
+          <Headline text={headline(pred, today)} />
         </div>
         <button className="btn primary rose" onClick={() => openEditor('period', null, today)}>
           <Icon name="plus" size={18} /> Log today
@@ -104,96 +104,132 @@ function StatusCard({ pred, today, settings }) {
   )
 }
 
+function Headline({ text }) {
+  const m = text.match(/^(.*?)(\b(?:in )?\d+ days?|today|late)$/i)
+  if (!m) return <h1 className="cycle-h1">{text}</h1>
+  const [, lead, tail] = m
+  const words = tail.replace(/^in /, '')
+  return (
+    <h1 className="cycle-h1">
+      {lead}
+      {tail.startsWith('in ') ? 'in ' : ''}
+      <em>{words}</em>
+    </h1>
+  )
+}
+
+/** The cycle as an ink-ring drawing: phase arcs on the main orbit, a glowing dot for today. */
 function Ring({ pred, today, settings }) {
   const L = pred.cycleLength
   const day = Math.min(pred.cycleDay, L + (pred.next?.lateBy || 0))
   const total = Math.max(L, day)
   const ovDay = L - 13
-  const showFertile = settings.showFertile
   const segs = [
     ['menstrual', 1, pred.periodLen],
     ['follicular', pred.periodLen + 1, ovDay - 2],
     ['ovulation', ovDay - 1, ovDay + 1],
     ['luteal', ovDay + 2, total],
   ].filter(([, a, b]) => b >= a)
-  const R = 92
-  const C = 2 * Math.PI * R
-  const arc = (a, b) => ({ len: ((b - a + 1) / total) * C, off: -((a - 1) / total) * C })
+  const S = 340
+  const C = S / 2
+  const R = 112
+  const circ = 2 * Math.PI * R
+  const arc = (a, b) => ({ len: ((b - a + 1) / total) * circ, off: -((a - 1) / total) * circ })
   const angle = ((day - 0.5) / total) * 2 * Math.PI - Math.PI / 2
-  const mx = 120 + R * Math.cos(angle)
-  const my = 120 + R * Math.sin(angle)
+  const mx = C + R * Math.cos(angle)
+  const my = C + R * Math.sin(angle)
+  const ink = '#e7899f'
+  const showFertile = settings.showFertile
   return (
-    <div className="card ring-card">
-      <svg viewBox="0 0 240 240" className="ring" role="img" aria-label={`Cycle day ${pred.cycleDay}, ${phaseLabel(pred.phase)} phase`}>
-        <circle cx="120" cy="120" r={R} fill="none" stroke="var(--line)" strokeWidth="16" />
-        {segs.map(([p, a, b]) => {
-          const { len, off } = arc(a, b)
-          return (
-            <circle
-              key={p}
-              cx="120"
-              cy="120"
-              r={R}
-              fill="none"
-              stroke={PHASE_COLORS[p]}
-              strokeOpacity={p === pred.phase ? 1 : 0.4}
-              strokeWidth="16"
-              strokeDasharray={`${Math.max(0, len - 3)} ${C}`}
-              strokeDashoffset={off}
-              transform="rotate(-90 120 120)"
-              strokeLinecap="round"
-            >
-              <title>{`${phaseLabel(p)}: days ${a}–${b}`}</title>
-            </circle>
-          )
-        })}
-        <circle cx={mx} cy={my} r="11" fill="#fff" stroke="var(--ink)" strokeWidth="2.5" />
-        <text x="120" y="104" textAnchor="middle" className="ring-small">
-          Day
-        </text>
-        <text x="120" y="142" textAnchor="middle" className="ring-big">
-          {pred.cycleDay}
-        </text>
-        <text x="120" y="166" textAnchor="middle" className="ring-small">
-          {phaseLabel(pred.phase)}
-        </text>
-      </svg>
-      <div className="ring-info">
-        <p className="phase-blurb">{phaseBlurb(pred.phase)}</p>
-        <dl className="kv">
-          {pred.next && (
-            <>
-              <dt>Next period</dt>
-              <dd>
-                {pred.next.lateBy ? `${pred.next.lateBy} days late` : `${fmtDay(pred.next.start)} · ${relDays(pred.next.start, today)}`}
-                <span className="muted"> ±{pred.next.range}d</span>
-              </dd>
-            </>
-          )}
-          {showFertile && pred.fertile && pred.fertile.end >= today && (
-            <>
-              <dt>Fertile window</dt>
-              <dd>
-                {fmtShort(pred.fertile.start)} – {fmtShort(pred.fertile.end)}
-              </dd>
-            </>
-          )}
-          {showFertile && pred.ovulation && pred.ovulation >= today && (
-            <>
-              <dt>Ovulation (est.)</dt>
-              <dd>{fmtDay(pred.ovulation)}</dd>
-            </>
-          )}
-          <dt>Confidence</dt>
-          <dd className={`conf conf-${pred.confidence}`}>{pred.confidence}</dd>
-        </dl>
-        <div className="phase-legend">
-          {Object.entries(PHASE_COLORS).map(([p, c]) => (
-            <span key={p}>
-              <i style={{ background: c }} /> {phaseLabel(p)}
-            </span>
+    <div className="ink-cycle">
+      <svg viewBox={`0 0 ${S} ${S}`} className="ink-svg" role="img" aria-label={`Cycle day ${pred.cycleDay}, ${phaseLabel(pred.phase)} phase`}>
+        <defs>
+          <radialGradient id="cy-glow">
+            <stop offset="0" stopColor={ink} stopOpacity=".32" />
+            <stop offset="1" stopColor={ink} stopOpacity="0" />
+          </radialGradient>
+          <filter id="cy-soft">
+            <feGaussianBlur stdDeviation="1.3" />
+          </filter>
+          <filter id="cy-bloom" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="5" />
+          </filter>
+        </defs>
+        <circle cx={C} cy={C} r={C - 4} fill="url(#cy-glow)" />
+        <g fill="none" stroke={ink} filter="url(#cy-soft)">
+          <circle cx={C} cy={C} r={150} strokeOpacity=".09" strokeWidth="22" />
+          <circle cx={C} cy={C} r={130} strokeOpacity=".15" strokeWidth="9" />
+          <circle cx={C} cy={C} r={R} strokeOpacity=".22" strokeWidth="1.5" />
+          <circle cx={C} cy={C} r={96} strokeOpacity=".12" strokeWidth="16" />
+          <circle cx={C} cy={C} r={74} strokeOpacity=".18" strokeWidth="1.2" />
+          {[
+            [C, 30],
+            [C, S - 30],
+            [30, C],
+            [S - 30, C],
+          ].map(([x, y], i) => (
+            <g key={i}>
+              <circle cx={x} cy={y} r="18" strokeOpacity=".28" strokeWidth="5" />
+              <circle cx={x} cy={y} r="8" strokeOpacity=".5" strokeWidth="1.2" />
+            </g>
           ))}
-        </div>
+        </g>
+        <g fill="none" strokeWidth="5" strokeLinecap="round" transform={`rotate(-90 ${C} ${C})`}>
+          {segs.map(([p, a, b]) => {
+            const { len, off } = arc(a, b)
+            if (p !== 'menstrual' && !showFertile && (p === 'ovulation')) return null
+            return (
+              <circle key={p} cx={C} cy={C} r={R} stroke={PHASE_COLORS[p]} strokeOpacity={p === pred.phase ? 1 : 0.55} strokeDasharray={`${Math.max(0, len - 5)} ${circ}`} strokeDashoffset={off}>
+                <title>{`${phaseLabel(p)}: days ${a}–${b}`}</title>
+              </circle>
+            )
+          })}
+        </g>
+        <g fill="#f4ede4">
+          {[
+            [C, 30],
+            [C, S - 30],
+            [30, C],
+            [S - 30, C],
+          ].map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r="2.6" />
+          ))}
+        </g>
+        <circle cx={mx} cy={my} r="12" fill="#f4ede4" filter="url(#cy-bloom)" opacity=".7" />
+        <circle cx={mx} cy={my} r="7.5" fill="#f4ede4" />
+      </svg>
+      <div className="ink-center">
+        <span className="eyebrow">Day</span>
+        <b>{pred.cycleDay}</b>
+        <span>{phaseLabel(pred.phase)}</span>
+      </div>
+      <p className="phase-blurb">{phaseBlurb(pred.phase)}</p>
+      <div className="cy-cards">
+        {pred.next && (
+          <div className="cy-card">
+            <span className="eyebrow">Next period</span>
+            <b>{pred.next.lateBy ? `${pred.next.lateBy}d late` : fmtShort(pred.next.start)}</b>
+            <span>
+              ±{pred.next.range} days · {pred.confidence} confidence
+            </span>
+          </div>
+        )}
+        {showFertile && pred.fertile && pred.fertile.end >= today && (
+          <div className="cy-card">
+            <span className="eyebrow">Fertile (est.)</span>
+            <b>
+              {fmtShort(pred.fertile.start)}–{fmtShort(pred.fertile.end).replace(/^[A-Za-z]+ /, '')}
+            </b>
+            <span>ovulation ~{fmtShort(pred.ovulation)}</span>
+          </div>
+        )}
+      </div>
+      <div className="phase-legend">
+        {Object.entries(PHASE_COLORS).map(([p, c]) => (
+          <span key={p}>
+            <i style={{ background: c }} /> {phaseLabel(p)}
+          </span>
+        ))}
       </div>
     </div>
   )

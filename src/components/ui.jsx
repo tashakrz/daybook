@@ -38,36 +38,50 @@ export function Icon({ name, size = 22, stroke = 1.6, ...rest }) {
 }
 
 /* ---------- decorative background ---------- */
+/** Concentric "ink" rings, like ink drawings on paper. Mirrored, soft, with white dots. */
+export function InkRings({ size = 260, color = '#e7899f', className = '', dense = 1, style }) {
+  const c = size / 2
+  const rings = [
+    [0.96, 0.08, 0.1],
+    [0.8, 0.14, 0.05],
+    [0.7, 0.3, 0.01],
+    [0.6, 0.12, 0.07],
+    [0.44, 0.34, 0.012],
+    [0.34, 0.16, 0.05],
+    [0.2, 0.42, 0.01],
+  ].slice(0, Math.round(7 * dense))
+  return (
+    <svg className={`ink-rings ${className}`} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={style}>
+      <defs>
+        <filter id="ink-soft">
+          <feGaussianBlur stdDeviation={size / 260} />
+        </filter>
+      </defs>
+      <g fill="none" stroke={color} filter="url(#ink-soft)">
+        {rings.map(([r, o, w], i) => (
+          <circle key={i} cx={c} cy={c} r={c * r} strokeOpacity={o} strokeWidth={Math.max(1, size * w)} />
+        ))}
+        <circle cx={c} cy={c * 0.42} r={c * 0.14} strokeOpacity="0.3" strokeWidth={Math.max(1, size * 0.008)} />
+        <circle cx={c} cy={c * 1.58} r={c * 0.14} strokeOpacity="0.3" strokeWidth={Math.max(1, size * 0.008)} />
+      </g>
+      <g fill="#f4ede4" opacity="0.75">
+        <circle cx={c} cy={size * 0.02 + 3} r={Math.max(1.5, size * 0.012)} />
+        <circle cx={c} cy={c * 0.42} r={Math.max(1.5, size * 0.01)} />
+        <circle cx={c} cy={c * 1.58} r={Math.max(1.5, size * 0.01)} />
+        <circle cx={c * 0.32} cy={c} r={Math.max(1, size * 0.007)} />
+        <circle cx={c * 1.68} cy={c} r={Math.max(1, size * 0.007)} />
+      </g>
+    </svg>
+  )
+}
+
 export function Blobs() {
   return (
     <div className="blobs" aria-hidden="true">
-      <svg viewBox="0 0 600 600" className="blob b1">
-        <defs>
-          <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0" stopColor="#F7C9C0" />
-            <stop offset="1" stopColor="#E9B6D6" />
-          </linearGradient>
-        </defs>
-        <path fill="url(#g1)" d="M421 75c62 39 112 116 104 190-8 75-74 146-150 186-76 41-162 50-226 12C85 425 43 340 60 262 77 184 152 113 228 77c76-37 131-41 193-2z" />
-      </svg>
-      <svg viewBox="0 0 600 600" className="blob b2">
-        <defs>
-          <linearGradient id="g2" x1="0" x2="1" y1="1" y2="0">
-            <stop offset="0" stopColor="#C9E1D3" />
-            <stop offset="1" stopColor="#CFE0F3" />
-          </linearGradient>
-        </defs>
-        <path fill="url(#g2)" d="M447 140c51 54 69 141 38 211-31 69-111 121-195 128-83 7-169-30-201-96-33-66-12-161 43-220 56-58 146-79 216-70 41 6 72 19 99 47z" />
-      </svg>
-      <svg viewBox="0 0 600 600" className="blob b3">
-        <defs>
-          <linearGradient id="g3" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0" stopColor="#FBE3B4" />
-            <stop offset="1" stopColor="#F6C7A8" />
-          </linearGradient>
-        </defs>
-        <path fill="url(#g3)" d="M398 98c55 31 90 92 92 155 2 64-29 130-82 168-54 39-130 50-191 25S108 359 101 294c-7-66 26-139 81-181 55-43 160-46 216-15z" />
-      </svg>
+      <div className="glow g1" />
+      <div className="glow g2" />
+      <InkRings size={420} className="bg-rings r1" />
+      <InkRings size={300} color="#8f9ae6" className="bg-rings r2" dense={0.7} />
     </div>
   )
 }

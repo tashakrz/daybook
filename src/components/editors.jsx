@@ -55,16 +55,28 @@ export function ClassEditor({ item, onClose }) {
   )
 }
 
+const CLASS_COLORS = ['sky', 'lavender', 'teal', 'peach', 'sun', 'plum', 'sage', 'rose', 'clay']
+/** Optional class tag. "New class…" creates one on the spot. */
 function ClassSelect({ value, onChange }) {
   const classes = useItems('class').sort((a, b) => a.name.localeCompare(b.name))
+  const pick = async (v) => {
+    if (v !== '__new') return onChange(v || null)
+    const name = window.prompt('Class name (e.g. BIOL 150)')?.trim()
+    if (!name) return
+    const existing = classes.find((c) => c.name.toLowerCase() === name.toLowerCase())
+    if (existing) return onChange(existing.id)
+    const id = await save('class', { name, color: CLASS_COLORS[classes.length % CLASS_COLORS.length] })
+    onChange(id)
+  }
   return (
-    <select value={value || ''} onChange={(e) => onChange(e.target.value || null)}>
+    <select value={value || ''} onChange={(e) => pick(e.target.value)}>
       <option value="">No class</option>
       {classes.map((c) => (
         <option key={c.id} value={c.id}>
           {c.name}
         </option>
       ))}
+      <option value="__new">＋ New class…</option>
     </select>
   )
 }

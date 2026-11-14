@@ -1,15 +1,16 @@
-// Soft gradient palette used for tasks, classes, events and habits.
+// Moody "disc" gradients for a dark theme: deep (c) → saturated (b) → light (a).
+// `ink` is a light tint for text/tags on the dark background.
 export const COLORS = {
-  rose: { name: 'Rose', a: '#F4B6B6', b: '#E57C8E', ink: '#B4485D' },
-  peach: { name: 'Peach', a: '#FAD6A5', b: '#F19A6B', ink: '#B5622F' },
-  sun: { name: 'Sun', a: '#FBE7A1', b: '#E9B949', ink: '#94701A' },
-  sage: { name: 'Sage', a: '#D8E8C4', b: '#8DB596', ink: '#4F7A59' },
-  teal: { name: 'Teal', a: '#BFE3DC', b: '#5FA8A3', ink: '#2F6F6B' },
-  sky: { name: 'Sky', a: '#CFE3F6', b: '#6F9FD8', ink: '#3A659C' },
-  lavender: { name: 'Lavender', a: '#E0D8F3', b: '#9C8AD0', ink: '#62529A' },
-  plum: { name: 'Plum', a: '#EBC9DF', b: '#B0679A', ink: '#7D3E6A' },
-  clay: { name: 'Clay', a: '#EED3C4', b: '#C98568', ink: '#8E5238' },
-  stone: { name: 'Stone', a: '#E6E1DA', b: '#9A938A', ink: '#5E5850' },
+  rose: { name: 'Rose', a: '#f5cdd0', b: '#da6290', c: '#4f3486', ink: '#f2a9c0' },
+  peach: { name: 'Coral', a: '#f3b07a', b: '#e0566b', c: '#7a3f8c', ink: '#f5b48e' },
+  sun: { name: 'Amber', a: '#f7dfb6', b: '#ec9840', c: '#a8403b', ink: '#f3c27a' },
+  sage: { name: 'Sage', a: '#d9ecc8', b: '#5fae8a', c: '#23506a', ink: '#9fd6b4' },
+  teal: { name: 'Teal', a: '#f0d2c0', b: '#3aa2a4', c: '#22397a', ink: '#8fd3d0' },
+  sky: { name: 'Blue', a: '#c9dcff', b: '#5b8fe0', c: '#2a2a72', ink: '#a9c4f5' },
+  lavender: { name: 'Indigo', a: '#d9cff7', b: '#7f6fdc', c: '#2f2470', ink: '#c3b6f2' },
+  plum: { name: 'Plum', a: '#f2c6e6', b: '#b0569a', c: '#3a2258', ink: '#e2a6d2' },
+  clay: { name: 'Rust', a: '#f4d0b8', b: '#c4673f', c: '#4f2638', ink: '#eba98a' },
+  stone: { name: 'Stone', a: '#d8d2cc', b: '#7b7380', c: '#2c2832', ink: '#c9c1cb' },
 }
 export const COLOR_IDS = Object.keys(COLORS)
 
@@ -26,9 +27,9 @@ export const DEFAULTS = {
 export const color = (id, fallback = 'stone') => COLORS[id] || COLORS[fallback]
 export const gradient = (id, fallback) => {
   const c = color(id, fallback)
-  return `linear-gradient(135deg, ${c.a}, ${c.b})`
+  return `linear-gradient(170deg, ${c.c} 0%, ${c.b} 58%, color-mix(in srgb, ${c.a} 65%, ${c.b}) 100%)`
 }
 export const cssVars = (id, fallback) => {
   const c = color(id, fallback)
-  return { '--c-a': c.a, '--c-b': c.b, '--c-ink': c.ink }
+  return { '--c-a': c.a, '--c-b': c.b, '--c-c': c.c, '--c-ink': c.ink }
 }

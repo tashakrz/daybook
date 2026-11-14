@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useItems, patch, save } from '../lib/store.js'
-import { today as todayStr, addDays, fmtLong, fmtDay, fmtWeekday, weekOf, relDays, diffDays, parse } from '../lib/dates.js'
-import { isScheduled, isDone, reminderActive, getSettings, nextOccurrence, eventOn, habitLogId } from '../lib/model.js'
+import { today as todayStr, addDays, fmtLong, fmtDay, fmtWeekday, relDays, diffDays, parse } from '../lib/dates.js'
+import { isScheduled, isDone, reminderActive, getSettings, nextOccurrence, habitLogId } from '../lib/model.js'
 import { cssVars, DEFAULTS } from '../lib/colors.js'
 import { predict, phaseLabel, METHODS } from '../lib/cycle.js'
-import { HabitCard } from '../components/HabitCards.jsx'
+import { HabitTile } from '../components/HabitCards.jsx'
 import { Check, Icon, Section, Empty, go, Segmented } from '../components/ui.jsx'
 import { openEditor } from '../components/EditorHost.jsx'
 import { REMINDER_MODES } from '../components/editors.jsx'
@@ -69,83 +69,50 @@ export default function Today() {
     .slice(0, 6)
   const ongoing = events.filter((e) => !e.yearly && e.endDate && e.date < date && e.endDate >= date)
 
-  const hour = new Date().getHours()
-  const greet = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const nextUp = pickNextUp(assignments, exams, date)
+  const restDue = dueSoon.filter((a) => a.id !== nextUp?.item.id)
+  const rail = [1, 2, 3, 4].map((n) => addDays(date, n))
 
   return (
     <div className="page today">
-      <header className="page-head">
-        <div>
-          <p className="eyebrow">{fmtLong(date)}</p>
-          <h1>
-            {greet}
-            {settings.name ? `, ${settings.name}` : ''}
-          </h1>
-        </div>
+      <div className="today-top">
+        <p className="eyebrow">{fmtLong(date)}</p>
         <CycleChip pred={pred} />
+      </div>
+      <header className="day-rail">
+        <h1>Today</h1>
+        {rail.map((d) => (
+          <button key={d} onClick={() => go(`/calendar?d=${d}`)} aria-label={fmtDay(d)}>
+            {parse(d).getDate()}
+          </button>
+        ))}
       </header>
 
       <MorningStrip />
 
-      <WeekStrip date={date} habits={habits} logById={logById} assignments={assignments} events={events} exams={exams} pred={pred} outlook={outlook} />
+      <NextUp next={nextUp} cls={nextUp && classById[nextUp.item.classId]} date={date} />
 
-      {olToday.length > 0 && (
-        <div className="upcoming outlook-today">
-          <span className="upcoming-label">Today in Outlook</span>
-          <ul>
-            {olToday.map((e) => (
-              <li key={e.id} style={cssVars(settings.outlookColor)} onClick={() => go(`/calendar?d=${date}`)}>
-                <i className="dot" />
-                <span className="up-date">{fmtTimeRange(e, date)}</span> {e.title}
-                {e.location && <span className="muted"> · {e.location}</span>}
-              </li>
-            ))}
-          </ul>
+      <Section
+        title={
+          <>
+            Dailies <span className="count">{doneCount} of {todays.length}</span>
+          </>
+        }
+        action={
+          <button className="link" onClick={() => go('/habits')}>
+            History →
+          </button>
+        }
+      >
+        {todays.length === 0 && <Empty>Nothing scheduled today.</Empty>}
+        <div className="tiles">
+          {todays.map((h) => (
+            <HabitTile key={h.id} habit={h} log={logById[habitLogId(h.id, date)]} date={date} settings={settings} />
+          ))}
         </div>
-      )}
-
-      {(upcoming.length > 0 || ongoing.length > 0) && (
-        <div className="upcoming">
-          <span className="upcoming-label">Coming up</span>
-          <ul>
-            {ongoing.map((e) => (
-              <li key={'on' + e.id} style={cssVars(e.color || DEFAULTS.event)} onClick={() => openEditor('event', e)}>
-                <i className="dot" /> {e.title} <span className="muted">· until {fmtDay(e.endDate)}</span>
-              </li>
-            ))}
-            {upcoming.map((u) => (
-              <li key={u.kind + u.id} style={cssVars(u.color)} onClick={() => openEditor(u.kind, u.item)}>
-                <i className="dot" />
-                <span className="up-date">{u.date === date ? 'Today' : fmtDay(u.date)}</span> {u.kind === 'exam' && '📝 '}
-                {u.title} <span className="muted">· {relDays(u.date, date)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      </Section>
 
       <div className="today-grid">
-        <Section
-          title={
-            <>
-              Dailies <span className="count">{doneCount}/{todays.length}</span>
-            </>
-          }
-          action={
-            <button className="link" onClick={() => go('/habits')}>
-              History →
-            </button>
-          }
-          className="dailies"
-        >
-          {todays.length === 0 && <Empty>Nothing scheduled today.</Empty>}
-          <div className="habit-list">
-            {todays.map((h) => (
-              <HabitCard key={h.id} habit={h} log={logById[habitLogId(h.id, date)]} date={date} settings={settings} />
-            ))}
-          </div>
-        </Section>
-
         <div className="today-col">
           <Section
             title="Due soon"
@@ -155,9 +122,9 @@ export default function Today() {
               </button>
             }
           >
-            {dueSoon.length === 0 && recentlyDone.length === 0 && <Empty>No assignments due this week. 🌿</Empty>}
+            {restDue.length === 0 && recentlyDone.length === 0 && <Empty>{nextUp ? 'Nothing else due this week.' : 'No assignments due this week.'}</Empty>}
             <ul className="task-list">
-              {dueSoon.map((a) => (
+              {restDue.map((a) => (
                 <AssignmentRow key={a.id} a={a} cls={classById[a.classId]} date={date} />
               ))}
               {recentlyDone.map((a) => (
@@ -178,9 +145,7 @@ export default function Today() {
             </ul>
             {laterRem.length > 0 && (
               <details className="later">
-                <summary>
-                  {laterRem.length} scheduled for later
-                </summary>
+                <summary>{laterRem.length} scheduled for later</summary>
                 <ul className="task-list">
                   {laterRem
                     .sort((a, b) => a.date.localeCompare(b.date))
@@ -192,7 +157,107 @@ export default function Today() {
             )}
           </Section>
         </div>
+
+        <div className="today-col">
+          {olToday.length > 0 && (
+            <Section title="Also today" action={<span className="eyebrow">Outlook</span>}>
+              <ul className="quiet-list">
+                {olToday.map((e) => (
+                  <li key={e.id} style={cssVars(settings.outlookColor)} onClick={() => go(`/calendar?d=${date}`)}>
+                    <i className="qbar" />
+                    <div>
+                      <strong>
+                        {e.allDay ? '' : fmtTimeRange(e, date).split(' –')[0] + ' · '}
+                        {e.title}
+                      </strong>
+                      {e.location && <span>{e.location.split(' (')[0]}</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+          {(upcoming.length > 0 || ongoing.length > 0) && (
+            <Section title="Coming up">
+              <ul className="quiet-list">
+                {ongoing.map((e) => (
+                  <li key={'on' + e.id} style={cssVars(e.color || DEFAULTS.event)} onClick={() => openEditor('event', e)}>
+                    <i className="qbar" />
+                    <div>
+                      <strong>{e.title}</strong>
+                      <span>until {fmtDay(e.endDate)}</span>
+                    </div>
+                  </li>
+                ))}
+                {upcoming.map((u) => (
+                  <li key={u.kind + u.id} style={cssVars(u.color)} onClick={() => openEditor(u.kind, u.item)}>
+                    <i className="qbar" />
+                    <div>
+                      <strong>
+                        {u.kind === 'exam' && '📝 '}
+                        {u.title}
+                      </strong>
+                      <span>
+                        {u.date === date ? 'Today' : fmtDay(u.date)} · {relDays(u.date, date)}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+        </div>
       </div>
+    </div>
+  )
+}
+
+/** The single most urgent school thing: overdue/nearest assignment or an exam this week. */
+function pickNextUp(assignments, exams, date) {
+  const c = [
+    ...assignments.filter((a) => !a.done).map((a) => ({ kind: 'assignment', item: a, date: a.due, time: a.dueTime || '23:59' })),
+    ...exams.filter((x) => x.date >= date && x.date <= addDays(date, 7)).map((x) => ({ kind: 'exam', item: x, date: x.date, time: x.time || '09:00' })),
+  ]
+  c.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+  return c[0] || null
+}
+
+function NextUp({ next, cls, date }) {
+  if (!next)
+    return (
+      <div className="next-up calm">
+        <span className="eyebrow">Next up</span>
+        <h2>Nothing due.</h2>
+        <p>Enjoy the space, or add something below.</p>
+      </div>
+    )
+  const { item, kind } = next
+  const n = diffDays(date, next.date)
+  const when = n < 0 ? 'late' : n === 0 ? 'today' : n === 1 ? 'tmrw' : fmtWeekday(next.date)
+  const label = n < 0 ? 'Overdue' : kind === 'exam' ? 'Next exam' : 'Next up'
+  return (
+    <div className={`next-up ${n < 0 ? 'late' : ''}`} role="button" tabIndex={0} onClick={() => openEditor(kind, item)}>
+      <span className="eyebrow">{label}</span>
+      <div className="nu-when">
+        <b>{when}</b>
+        <span className="eyebrow">{kind === 'exam' ? item.time || 'exam' : item.dueTime || 'due'}</span>
+      </div>
+      <h2>
+        {kind === 'exam' && '📝 '}
+        {kind === 'exam' ? item.title : item.title}
+      </h2>
+      <p>{[cls?.name, kind === 'exam' ? item.location : n < 0 ? `was due ${fmtDay(item.due)}` : null].filter(Boolean).join(' · ') || (kind === 'exam' ? 'Exam' : 'Assignment')}</p>
+      {kind === 'assignment' && (
+        <button
+          className="nu-done"
+          onClick={(e) => {
+            e.stopPropagation()
+            patch(item.id, { done: true, doneAt: todayStr() })
+          }}
+        >
+          <Icon name="check" size={18} stroke={2.2} /> Done
+        </button>
+      )}
     </div>
   )
 }
@@ -209,35 +274,6 @@ function CycleChip({ pred }) {
     <button className="cycle-chip" onClick={() => go('/cycle')} style={cssVars('rose')}>
       <Icon name="cycle" size={16} /> {text}
     </button>
-  )
-}
-
-function WeekStrip({ date, habits, logById, assignments, events, exams, pred, outlook }) {
-  const days = weekOf(date)
-  return (
-    <div className="week-strip">
-      {days.map((d) => {
-        const sched = habits.filter((h) => !h.archived && isScheduled(h, d))
-        const done = sched.filter((h) => isDone(h, logById[habitLogId(h.id, d)])).length
-        const pct = sched.length ? done / sched.length : 0
-        const hasDue = assignments.some((a) => !a.done && a.due === d)
-        const hasEvent = events.some((e) => eventOn(e, d)) || exams.some((x) => x.date === d) || outlook.some((e) => icsEventOn(e, d))
-        const period = pred.episodes?.some((e) => d >= e.start && d <= e.end) || pred.futurePeriods?.some((p) => d >= p.start && d <= p.end)
-        return (
-          <button key={d} className={`wk-day ${d === date ? 'is-today' : ''} ${d > date ? 'future' : ''}`} onClick={() => go(`/calendar?d=${d}`)}>
-            <span className="wk-name">{fmtWeekday(d).slice(0, 2)}</span>
-            <span className="wk-num" style={{ '--p': d <= date ? pct : 0 }}>
-              {parse(d).getDate()}
-            </span>
-            <span className="wk-dots">
-              {hasDue && <i style={cssVars('sky')} />}
-              {hasEvent && <i style={cssVars('teal')} />}
-              {period && <i style={cssVars('rose')} />}
-            </span>
-          </button>
-        )
-      })}
-    </div>
   )
 }
 

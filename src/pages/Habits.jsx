@@ -98,7 +98,7 @@ function HabitHistory({ h, byId, settings }) {
               const sched = isScheduled(h, d)
               const p = future ? 0 : progress(h, byId[habitLogId(h.id, d)])
               const style = { gridRow: dow(d) + 1 }
-              if (p > 0) style.background = `color-mix(in srgb, ${c.b} ${Math.round(25 + p * 75)}%, ${c.a})`
+              if (p > 0) style.background = `color-mix(in srgb, ${c.b} ${Math.round(25 + p * 75)}%, ${c.c})`
               if (p >= 1) style.background = c.b
               return (
                 <span

@@ -68,29 +68,39 @@ export function MorningGate() {
   return isOpen ? <MorningScreen /> : null
 }
 
+const QUESTIONS = { 'made my bed': 'Did you make your bed?', 'took my adhd meds': 'Did you take your ADHD meds?' }
+export const questionFor = (c) => c.question || QUESTIONS[(c.name || '').trim().toLowerCase()] || `${c.name}?`
+/** Big question with the last word in italics. */
+function Question({ text }) {
+  const words = text.split(' ')
+  const last = words.pop()
+  return (
+    <h1 className="mq">
+      {words.join(' ')} <em>{last}</em>
+    </h1>
+  )
+}
+
+const useWide = () => {
+  const mq = typeof window !== 'undefined' ? window.matchMedia('(min-width: 760px)') : null
+  return useSyncExternalStore(
+    (l) => (mq?.addEventListener('change', l), () => mq?.removeEventListener('change', l)),
+    () => !!mq?.matches,
+  )
+}
+
 function MorningScreen() {
   useItems('morninglog')
   const checks = useItems('morning')
     .filter((c) => !c.archived)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   const date = todayStr()
+  const wide = useWide()
+  const [skipped, setSkipped] = useState([])
   const done = checks.filter((c) => isChecked(c, date)).length
   const allDone = checks.length > 0 && done === checks.length
+  const current = checks.find((c) => !isChecked(c, date) && !skipped.includes(c.id))
   const name = getSettings().name
-
-  useEffect(() => {
-    if (!allDone) return
-    const t = setTimeout(() => {
-      setOpen(false)
-      go('/today')
-    }, 1400)
-    return () => clearTimeout(t)
-  }, [allDone])
-
-  useEffect(() => {
-    document.body.classList.add('locked')
-    return () => document.body.classList.remove('locked')
-  }, [])
 
   const later = () => {
     try {
@@ -101,30 +111,96 @@ function MorningScreen() {
     setOpen(false)
   }
 
+  useEffect(() => {
+    if (!allDone) return
+    const t = setTimeout(() => {
+      setOpen(false)
+      go('/today')
+    }, 1300)
+    return () => clearTimeout(t)
+  }, [allDone])
+
+  // phone: every remaining check skipped → close for now
+  useEffect(() => {
+    if (!wide && !allDone && !current && checks.length) later()
+  }, [wide, allDone, current, checks.length])
+
+  useEffect(() => {
+    if (wide) return
+    document.body.classList.add('locked')
+    return () => document.body.classList.remove('locked')
+  }, [wide])
+
+  if (wide) {
+    // laptop: a small floating window, not a takeover
+    return (
+      <div className="morning-window" role="dialog" aria-label="Morning checks">
+        <div className="mw-head">
+          <span className="eyebrow">{allDone ? 'All set ✨' : `Good morning${name ? ', ' + name : ''} · ${done} of ${checks.length}`}</span>
+          <button className="icon-btn small" onClick={later} aria-label="Close">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        {checks.map((c) => {
+          const log = get(morningLogId(c.id, date))
+          const on = !!log?.done
+          return (
+            <button key={c.id} className={`mw-row ${on ? 'on' : ''}`} style={cssVars(c.color, 'peach')} onClick={() => toggleCheck(c, date, !on)} aria-pressed={on}>
+              <span className="mw-icon">{c.icon}</span>
+              <span className="mw-text">
+                <strong>{questionFor(c)}</strong>
+                <span>{on ? `Done · ${fmtAt(log.at)}` : 'Click when done'}</span>
+              </span>
+              <span className="mw-check disc">{on && <Icon name="check" size={18} stroke={2.4} />}</span>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // phone: one question per screen
+  const idx = current ? checks.indexOf(current) : checks.length
+  const after = current ? checks.slice(idx + 1).find((c) => !isChecked(c, date) && !skipped.includes(c.id)) : null
   return (
     <div className="morning" role="dialog" aria-modal="true" aria-label="Morning checks">
       <div className="morning-inner">
-        <p className="eyebrow">{fmtLong(date)}</p>
-        <h1>{allDone ? 'You’re all set ✨' : `Good morning${name ? ', ' + name : ''}`}</h1>
-        <p className="muted">{allDone ? 'Taking you to the rest of your day…' : `Before anything else · ${done} of ${checks.length} done`}</p>
-        <div className="morning-cards">
-          {checks.map((c) => {
-            const log = get(morningLogId(c.id, date))
-            const on = !!log?.done
-            return (
-              <button key={c.id} className={`morning-card ${on ? 'on' : ''}`} style={cssVars(c.color, 'peach')} onClick={() => toggleCheck(c, date, !on)} aria-pressed={on}>
-                <span className="mc-icon">{c.icon}</span>
-                <span className="mc-name">{c.name}</span>
-                <span className="mc-state">{on ? `Done · ${fmtAt(log.at)}` : 'Tap when done'}</span>
-                <span className="mc-check">{on && <Icon name="check" size={26} stroke={2.4} />}</span>
-              </button>
-            )
-          })}
+        <div className="m-prog">
+          {checks.map((c) => (
+            <i key={c.id} className={isChecked(c, date) ? 'on' : c === current ? 'cur' : ''} />
+          ))}
         </div>
-        {!allDone && (
-          <button className="link morning-later" onClick={later}>
-            Not now
-          </button>
+        {allDone || !current ? (
+          <div className="m-done">
+            <span className="eyebrow">Good morning{name ? ', ' + name : ''}</span>
+            <h1 className="mq">
+              You’re all <em>set.</em>
+            </h1>
+            <p className="m-sub">Taking you to the rest of your day…</p>
+          </div>
+        ) : (
+          <>
+            <span className="eyebrow">
+              Good morning · {done + 1} of {checks.length}
+            </span>
+            <span className="m-icon">{current.icon}</span>
+            <Question text={questionFor(current)} />
+            <p className="m-sub">Just this one thing first.</p>
+            <button className="m-disc disc" style={cssVars(current.color, 'peach')} onClick={() => toggleCheck(current, date, true)}>
+              Done
+            </button>
+            <button className="link m-later" onClick={() => setSkipped([...skipped, current.id])}>
+              not yet
+            </button>
+            {after && (
+              <div className="m-next">
+                <span>Next</span>
+                <span>
+                  {after.icon} {after.name}
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
